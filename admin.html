@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Espace Administrateur - Boulangerie Fidélité</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #fffaf2;
+      margin: 0;
+      padding: 20px;
+    }
+    h1 {
+      color: #b87333;
+      text-align: center;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      padding: 10px;
+      border: 1px solid #ddd;
+      text-align: center;
+    }
+    th {
+      background: #b87333;
+      color: white;
+    }
+    button {
+      padding: 6px 10px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    .add { background: #4CAF50; color: white; }
+    .remove { background: #f44336; color: white; }
+    .delete { background: gray; color: white; }
+    .wipe { background: black; color: white; margin-bottom: 15px; }
+    .back {
+      margin-top: 15px;
+      background: #b87333;
+      color: white;
+      display: inline-block;
+      padding: 10px 15px;
+      text-decoration: none;
+      border-radius: 8px;
+    }
+    .back:hover { background: #8f5e27; }
+    .transaction-form {
+      margin-top: 30px;
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    select, input {
+      padding: 8px;
+      margin: 5px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Espace Administrateur 🧑‍🍳</h1>
+
+  <button class="wipe" onclick="deleteAllUsers()">🧹 Supprimer tous les clients</button>
+
+  <table id="userTable">
+    <thead>
+      <tr>
+        <th>Numéro client</th>
+        <th>Email</th>
+        <th>Solde (€)</th>
+        <th>Points</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <div class="transaction-form">
+    <h3>Ajouter une transaction client</h3>
+    <select id="clientSelect">
+      <option value="">-- Sélectionner un client --</option>
+    </select>
+    <select id="productSelect">
+      <option value="">-- Sélectionner un produit --</option>
+    </select>
+    <input type="number" id="quantity" min="1" value="1" style="width:60px">
+    <button class="add" onclick="addTransaction()">Enregistrer</button>
+  </div>
+
+  <a href="index.html" class="back">⬅️ Retour</a>
+
+  <script>
+    // --- Liste des produits disponibles à la boulangerie ---
+    const produits = [
+      { nom: "Baguette tradition", prix: 1.20 },
+      { nom: "Croissant", prix: 1.10 },
+      { nom: "Pain au chocolat", prix: 1.30 },
+      { nom: "Pain complet", prix: 2.50 },
+      { nom: "Tartelette citron", prix: 3.20 },
+      { nom: "Éclair au chocolat", prix: 2.80 },
+      { nom: "Café", prix: 1.50 },
+      { nom: "Boisson froide", prix: 2.00 }
+    ];
+
+    // --- Chargement de la table des clients ---
+    function loadUsers() {
+      const tbody = document.querySelector("#userTable tbody");
+      tbody.innerHTML = "";
+      const clientSelect = document.getElementById("clientSelect");
+      clientSelect.innerHTML = '<option value="">-- Sélectionner un client --</option>';
+
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key === "currentUser") continue;
+
+        try {
+          const user = JSON.parse(localStorage.getItem(key));
+          if (!user || !user.email || typeof user.email !== 'string') continue;
+
+          // Initialize balance and points if they don't exist
+          if (typeof user.balance !== 'number') user.balance = 0;
+          if (typeof user.points !== 'number') user.points = 0;
+
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${user.clientID || "—"}</td>
+            <td>${user.email}</td>
+            <td>${user.balance.toFixed(2)}</td>
+            <td>${user.points}</td>
+            <td>
+              <button class="add" onclick="modifyBalance('${user.email}', 1)">+1€</button>
+              <button class="remove" onclick="modifyBalance('${user.email}', -1)">-1€</button>
+              <button class="delete" onclick="deleteUser('${user.email}')">🗑️</button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+
+          // Ajout au menu déroulant des clients
+          const opt = document.createElement("option");
+          opt.value = user.email;
+          opt.textContent = `${user.email} (${user.clientID || "—"})`;
+          clientSelect.appendChild(opt);
+
+        } catch (e) {
+          console.error("Error loading user:", e);
+        }
+      }
+    }
+
+    // --- Chargement des produits dans la liste ---
+    function loadProduits() {
+      const select = document.getElementById("productSelect");
+      produits.forEach(p => {
+        const opt = document.createElement("option");
+        opt.value = p.nom;
+        opt.textContent = `${p.nom} - ${p.prix.toFixed(2)}€`;
+        select.appendChild(opt);
+      });
+    }
+
+    // --- Ajout d’une transaction ---
+    function addTransaction() {
+      const email = document.getElementById("clientSelect").value;
+      const produitNom = document.getElementById("productSelect").value;
+      const quantite = parseInt(document.getElementById("quantity").value);
+
+      if (!email || !produitNom || quantite < 1) {
+        alert("Veuillez sélectionner un client, un produit et une quantité valide.");
+        return;
+      }
+
+      const produit = produits.find(p => p.nom === produitNom);
+      const total = produit.prix * quantite;
+
+      const user = JSON.parse(localStorage.getItem(email));
+      if (!user) return alert("Client introuvable.");
+
+      // --- Enregistrement de la transaction ---
+      const now = new Date().toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
+      user.history = user.history || [];
+      user.history.push({
+        date: now,
+        action: `Achat : ${produit.nom} x${quantite}`,
+        amount: -total
+      });
+
+      // --- Mise à jour du solde ---
+      user.balance = Math.max(0, user.balance - total);
+
+      // --- Fidélité : 1 point = 1 euro dépensé ---
+      user.points = (user.points || 0) + Math.floor(total);
+
+      // --- Vérifie si le client atteint 100 points ---
+      if (user.points >= 100) {
+        user.balance += 5; // bonus 5 €
+        user.points -= 100;
+        user.history.push({
+          date: now,
+          action: "🎁 Bonus fidélité (100 points = +5€)",
+          amount: +5
+        });
+        alert(`🎉 ${user.email} a atteint 100 points ! Un bon d'achat de 5€ a été ajouté.`);
+      }
+
+      // --- Sauvegarde ---
+      localStorage.setItem(email, JSON.stringify(user));
+      loadUsers();
+      alert(`✅ Transaction enregistrée : ${produit.nom} x${quantite} (${total.toFixed(2)}€)`);
+    }
+
+    // --- Modifications manuelles du solde ---
+    function modifyBalance(email, change) {
+      const user = JSON.parse(localStorage.getItem(email));
+      if (!user) return;
+
+      user.balance = Math.max(0, user.balance + change);
+      const now = new Date().toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
+      user.history = user.history || [];
+      user.history.push({
+        date: now,
+        action: change > 0 ? "Ajout manuel" : "Retrait manuel",
+        amount: change
+      });
+
+      localStorage.setItem(email, JSON.stringify(user));
+      loadUsers();
+    }
+
+    // --- Suppression d’un client ---
+    function deleteUser(email) {
+      if (confirm(`Supprimer le compte de ${email} ?`)) {
+        localStorage.removeItem(email);
+        loadUsers();
+      }
+    }
+
+    // --- Suppression de tous les clients ---
+    function deleteAllUsers() {
+      if (confirm("⚠️ Voulez-vous vraiment supprimer TOUS les clients ?")) {
+        const keysToDelete = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key !== "currentUser") keysToDelete.push(key);
+        }
+        keysToDelete.forEach(k => localStorage.removeItem(k));
+        loadUsers();
+        alert("Tous les clients ont été supprimés.");
+      }
+    }
+
+    // --- Initialisation ---
+    loadUsers();
+    loadProduits();
+  </script>
+</body>
+</html>

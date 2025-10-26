@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Boulangerie Fidélité</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #fffaf2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    }
+    h1 {
+      color: #b87333;
+      margin-bottom: 20px;
+    }
+    .card {
+      background: white;
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      text-align: center;
+      width: 350px;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    input, button {
+      margin: 8px 0;
+      padding: 10px;
+      width: 100%;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      font-size: 15px;
+    }
+    button {
+      background-color: #b87333;
+      color: white;
+      border: none;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    button:hover {
+      background-color: #8f5e27;
+    }
+
+    /* --- Popup admin améliorée --- */
+    .popup {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(5px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+    }
+    .popup-content {
+      background: #fff;
+      padding: 30px;
+      border-radius: 16px;
+      width: 320px;
+      text-align: center;
+      box-shadow: 0 0 20px rgba(0,0,0,0.3);
+      animation: fadeIn 0.3s ease;
+    }
+    .popup-content h3 {
+      margin-bottom: 15px;
+      color: #b87333;
+    }
+    .popup-content input {
+      margin-bottom: 15px;
+      padding: 10px;
+      width: 90%;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+    }
+    .popup-content button {
+      width: 45%;
+      margin: 5px;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.9); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+    li {
+      border-bottom: 1px solid #eee;
+      padding: 5px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Programme Fidélité 🍞</h1>
+
+  <div class="card" id="login-card">
+    <h3>Connexion client</h3>
+    <input type="email" id="email" placeholder="Entrez votre e-mail">
+    <button onclick="login()">Se connecter</button>
+    <button onclick="createAccount()" style="background: #4CAF50; margin-top: 10px;">Créer un compte</button>
+  </div>
+
+  <div class="card" id="client-card" style="display:none;">
+    <h3 id="user-name"></h3>
+    <p>Numéro client : <strong id="client-id"></strong></p>
+    <p>Solde actuel : <strong id="balance">0.00</strong> €</p>
+    <p>Points fidélité : <strong id="points">0</strong></p>
+    <h4>Historique des transactions</h4>
+    <ul id="transactions"></ul>
+    <button onclick="logout()">Se déconnecter</button>
+  </div>
+
+  <!-- Popup admin (non visible par défaut) -->
+  <div class="popup" id="admin-popup">
+    <div class="popup-content">
+      <h3>Connexion Administrateur</h3>
+      <input type="password" id="admin-pass" placeholder="Mot de passe admin">
+      <div>
+        <button onclick="checkAdmin()">Entrer</button>
+        <button onclick="closeAdminPopup()">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const ADMIN_PASSWORD = "admin123";
+
+    function generateClientID() {
+      let id = "";
+      for (let i = 0; i < 13; i++) id += Math.floor(Math.random() * 10);
+      return id;
+    }
+
+    function createAccount() {
+      const email = document.getElementById("email").value.trim().toLowerCase();
+      if (!email) return alert("Veuillez entrer votre adresse e-mail.");
+      if (!email.includes('@')) return alert("Veuillez entrer une adresse e-mail valide.");
+
+      // Vérifier si le compte existe déjà
+      const existingUser = JSON.parse(localStorage.getItem(email));
+      if (existingUser) {
+        if (confirm("Un compte existe déjà avec cet e-mail. Voulez-vous vous connecter ?")) {
+          login();
+        }
+        return;
+      }
+
+      // Créer un nouveau compte
+      const newUser = {
+        email,
+        clientID: generateClientID(),
+        balance: 0,
+        points: 0,
+        history: []
+      };
+      
+      localStorage.setItem(email, JSON.stringify(newUser));
+      localStorage.setItem("currentUser", email);
+      showClientArea(newUser);
+      alert(`✅ Compte créé avec succès !\nNuméro client: ${newUser.clientID}`);
+    }
+
+    function login() {
+      const email = document.getElementById("email").value.trim().toLowerCase();
+      if (!email) return alert("Veuillez entrer votre adresse e-mail.");
+
+      const user = JSON.parse(localStorage.getItem(email));
+      if (!user) {
+        alert("Aucun compte trouvé avec cet e-mail. Veuillez créer un compte.");
+        return;
+      }
+
+      // Ensure existing users have points initialized
+      if (typeof user.points !== 'number') user.points = 0;
+      localStorage.setItem(email, JSON.stringify(user));
+
+      localStorage.setItem("currentUser", email);
+      showClientArea(user);
+    }
+
+    function showClientArea(user) {
+      document.getElementById("login-card").style.display = "none";
+      document.getElementById("client-card").style.display = "block";
+      document.getElementById("user-name").innerText = user.email;
+      document.getElementById("client-id").innerText = user.clientID;
+      document.getElementById("balance").innerText = user.balance.toFixed(2);
+      document.getElementById("points").innerText = user.points || 0;
+      showTransactions(user);
+    }
+
+    function showTransactions(user) {
+      const list = document.getElementById("transactions");
+      list.innerHTML = "";
+      if (user.history.length === 0) {
+        list.innerHTML = "<li>Aucune transaction enregistrée.</li>";
+      } else {
+        user.history.slice().reverse().forEach(t => {
+          const li = document.createElement("li");
+          const amount = typeof t.amount === 'number' ? Math.abs(t.amount).toFixed(2) : t.amount;
+          li.textContent = `${t.date} — ${t.action} : ${amount}€`;
+          list.appendChild(li);
+        });
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem("currentUser");
+      document.getElementById("client-card").style.display = "none";
+      document.getElementById("login-card").style.display = "block";
+    }
+
+    window.onload = () => {
+      const email = localStorage.getItem("currentUser");
+      if (email) {
+        const user = JSON.parse(localStorage.getItem(email));
+        if (user) showClientArea(user);
+      }
+    };
+
+    // --- Popup Admin ---
+    function openAdminPopup() {
+      document.getElementById("admin-popup").style.display = "flex";
+      document.getElementById("admin-pass").value = "";
+      document.getElementById("admin-pass").focus();
+    }
+    function closeAdminPopup() {
+      document.getElementById("admin-popup").style.display = "none";
+    }
+    function checkAdmin() {
+      const pass = document.getElementById("admin-pass").value;
+      if (pass === ADMIN_PASSWORD) {
+        window.location.href = "admin.html";
+      } else {
+        alert("Mot de passe incorrect !");
+      }
+    }
+
+    // --- Raccourci clavier caché : Ctrl + A ---
+    document.addEventListener("keydown", function (e) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
+        e.preventDefault();
+        openAdminPopup();
+      }
+    });
+  </script>
+</body>
+</html>
